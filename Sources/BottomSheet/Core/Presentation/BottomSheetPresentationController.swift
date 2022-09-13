@@ -24,8 +24,13 @@ public final class BottomSheetPresentationController: UIPresentationController {
     }
 
     private struct Style {
-        static let cornerRadius: CGFloat = 10
-        static let pullBarHeight = Style.cornerRadius * 2
+        static let cornerRadius: CGFloat = 16.0
+        static let pullBarHeight: CGFloat = 26.0
+    }
+    
+    public enum PullBarMode {
+        case `default`
+        case hidden
     }
 
     // MARK: - Public properties
@@ -36,6 +41,13 @@ public final class BottomSheetPresentationController: UIPresentationController {
 
     var interactiveTransition: UIViewControllerInteractiveTransitioning? {
         interactionController
+    }
+    
+    public var pullBarMode: PullBarMode = .default {
+        didSet {
+            guard pullBarMode != oldValue else { return }
+            containerView?.setNeedsLayout()
+        }
     }
 
     // MARK: - Private properties
@@ -170,6 +182,8 @@ public final class BottomSheetPresentationController: UIPresentationController {
     public override func containerViewDidLayoutSubviews() {
         cachedInsets = presentedView?.window?.safeAreaInsets ?? .zero
 
+        pullBar?.isHidden = pullBarMode == .hidden
+
         updatePresentedViewSize()
     }
 
@@ -282,13 +296,12 @@ public final class BottomSheetPresentationController: UIPresentationController {
         shadingView.frame = containerView.bounds
 
         let pullBar = PullBar()
+        pullBar.layer.zPosition = 10.0
         pullBar.frame.size = CGSize(width: containerView.frame.width, height: Style.pullBarHeight)
         containerView.addSubview(pullBar)
 
-        let tapGesture = UITapGestureRecognizer()
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleShadingViewTapGesture))
         shadingView.addGestureRecognizer(tapGesture)
-
-        tapGesture.addTarget(self, action: #selector(handleShadingViewTapGesture))
 
         self.shadingView = shadingView
         self.pullBar = pullBar
@@ -316,11 +329,13 @@ public final class BottomSheetPresentationController: UIPresentationController {
         let preferredHeight = presentedViewController.preferredContentSize.height + windowInsets.bottom
         let maxHeight = containerView.bounds.height - windowInsets.top - Style.pullBarHeight
         let height = min(preferredHeight, maxHeight)
-
+        let maxWidth = containerView.bounds.width - windowInsets.left - windowInsets.right
+        let width = min(presentedViewController.preferredContentSize.width, maxWidth)
+        
         return .init(
-            x: 0,
+            x: ((containerView.bounds.width - width) / 2).pixelCeiled,
             y: (containerView.bounds.height - height).pixelCeiled,
-            width: containerView.bounds.width,
+            width: width.pixelCeiled,
             height: height.pixelCeiled
         )
     }
@@ -334,7 +349,7 @@ public final class BottomSheetPresentationController: UIPresentationController {
         let targetFrame = targetFrameForPresentedView()
         if !oldFrame.isAlmostEqual(to: targetFrame) {
             presentedView.frame = targetFrame
-            pullBar?.frame.origin.y = presentedView.frame.minY - Style.pullBarHeight + pixelSize
+            pullBar?.frame.origin.y = presentedView.frame.minY + pixelSize
         }
     }
 
@@ -514,21 +529,21 @@ extension BottomSheetPresentationController: UIViewControllerAnimatedTransitioni
         let frameInContainer = frameOfPresentedViewInContainerView
         let offscreenFrame = CGRect(
             origin: CGPoint(
-                x: 0,
+                x: frameOfPresentedViewInContainerView.origin.x,
                 y: containerView.bounds.height
             ),
-            size: sourceView.frame.size
+            size: frameOfPresentedViewInContainerView.size
         )
 
         presentedView.frame = isPresenting ? offscreenFrame : frameInContainer
-        pullBar?.frame.origin.y = presentedView.frame.minY - Style.pullBarHeight + pixelSize
+        pullBar?.frame.origin.y = presentedView.frame.minY + pixelSize
         shadingView?.alpha = isPresenting ? 0 : 1
 
         applyStyle()
 
         let animations = {
             presentedView.frame = isPresenting ? frameInContainer : offscreenFrame
-            self.pullBar?.frame.origin.y = presentedView.frame.minY - Style.pullBarHeight + pixelSize
+            self.pullBar?.frame.origin.y = presentedView.frame.minY + pixelSize
             self.shadingView?.alpha = isPresenting ? 1 : 0
         }
 
